@@ -1,0 +1,30 @@
+---
+- name: Comment cron entries for flink and HDFS monitors
+  hosts: app_servers
+  become: yes
+  gather_facts: yes
+
+  tasks:
+
+    - name: Fetch current crontab
+      shell: crontab -l || true
+      register: current_cron
+
+    - name: Comment cron entry for flinkclustermonitoring.sh
+      shell: |
+        echo "{{ current_cron.stdout }}" \
+        | sed -e '/flinkclustermonitoring\.sh/s/^/#/' \
+        | crontab -
+      when: current_cron.stdout is defined
+
+    - name: Re-fetch crontab after update
+      shell: crontab -l || true
+      register: current_cron
+
+    - name: Comment cron entry for monitor_hdfs_cluster.sh
+      shell: |
+        echo "{{ current_cron.stdout }}" \
+        | sed -e '/monitor_hdfs_cluster\.sh/s/^/#/' \
+        | crontab -
+      when: current_cron.stdout is defined
+
