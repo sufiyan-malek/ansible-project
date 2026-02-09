@@ -18,7 +18,7 @@ pipeline {
 
     stage('Deploy') {
       steps {
-        sh 'ansible-playbook -i hosts comment_cronentries.yml'
+        sh 'ansible-playbook -i hosts deployment.yml'
       }
     }
 
