@@ -1,0 +1,177 @@
+---
+- name: Deployment playbook
+  hosts: app_servers
+  become: yes
+  gather_facts: yes
+
+  vars_prompt:
+    - name: deploy_logRouting
+      prompt: "Do you want to deploy logRouting drl? (yes/no)"
+      private: no
+      default: "no"
+
+    - name: deploy_ipmatcher
+      prompt: "Do you want to deploy ipmatcher csv? (yes/no)"
+      private: no
+      default: "no"
+
+    - name: deploy_aggregator
+      prompt: "Do you want to deploy aggregator's custom.conf files? (yes/no)"
+      private: no
+      default: "no"
+
+    - name: deploy_jar
+      prompt: "Do you want to deploy jar file? (yes/no)"
+      private: no
+      default: "no"
+
+    - name: deploy_jobconfig
+      prompt: "Do you want to deploy jobconfig file? (yes/no)"
+      private: no
+      default: "no"
+
+    - name: deploy_outputs
+      prompt: "Do you want to deploy outputs files? (yes/no)"
+      private: no
+      default: "no"
+
+    - name: stop_job
+      prompt: "Do you want to stop/drain Flink Job? (yes/no)"
+      private: no
+      default: "no"
+
+    - name: start_job
+      prompt: "Do you want to submit the new Flink Job? (yes/no)"
+      private: no
+      default: "no"
+
+
+  vars:
+    zookeeper_path: "{{ lookup('env', 'ZOOKEEPER_PATH') }}"
+    flink_path: "{{ lookup('env', 'FLINK_PATH') }}"
+    flink_job_parallelism: "{{ lookup('env', 'FLINK_JOB_PARALLELISM') }}"
+    flink_jar: "{{ lookup('env', 'FLINK_JAR') }}"
+    flink_jobconfig: "{{ lookup('env', 'FLINK_JOBCONFIG') }}"
+    flink_port: "{{ lookup('env', 'FLINK_UI_PORT') }}"
+    logrouting_src_file: "template/logrouting/logRouting.drl"
+    logrouting_dest_file: "{{ flink_path }}/logRouting.drl"
+    env_file: "/etc/environment"
+
+  tasks:
+
+    # =====================================================
+    # logRouting
+    # =====================================================
+    - name: Deploy logRouting on all nodes
+      include_tasks: tasks/logRouting_drl.yml
+      when: deploy_logRouting | lower in ['yes', 'y']
+
+    - name: Skip logRouting deployment
+      debug:
+        msg: "Skipping logRouting deployment"
+      when: deploy_logRouting | lower not in ['yes', 'y']
+
+    # =====================================================
+    # ipmatcher
+    # =====================================================
+    - name: Deploy ipmatcher on all nodes
+      include_tasks: tasks/ipmatcher.yml
+      when: deploy_ipmatcher | lower in ['yes', 'y']
+
+    - name: Skip ipmatcher deployment
+      debug:
+        msg: "Skipping ipmatcher deployment"
+      when: deploy_ipmatcher | lower not in ['yes', 'y']
+
+    # =====================================================
+    # Aggregator
+    # =====================================================
+    - name: Deploy aggregator on all nodes
+      include_tasks: tasks/aggregators.yml
+      when: deploy_aggregator | lower in ['yes', 'y']
+
+    - name: Skip aggregator deployment
+      debug:
+        msg: "Skipping aggregator deployment"
+      when: deploy_aggregator | lower not in ['yes', 'y']
+
+    # =====================================================
+    # JAR
+    # =====================================================
+    - name: Deploy jar on all nodes
+      include_tasks: tasks/jar.yml
+      when: deploy_jar | lower in ['yes', 'y']
+
+    - name: Skip jar deployment
+      debug:
+        msg: "Skipping jar deployment"
+      when: deploy_jar | lower not in ['yes', 'y']
+
+    # =====================================================
+    # Job Config
+    # =====================================================
+    - name: Deploy jobconfig on all nodes
+      include_tasks: tasks/jobconfig.yml
+      when: deploy_jobconfig | lower in ['yes', 'y']
+
+    - name: Skip jobconfig deployment
+      debug:
+        msg: "Skipping jobconfig deployment"
+      when: deploy_jobconfig | lower not in ['yes', 'y']
+
+    # =====================================================
+    # Outputs
+    # =====================================================
+    - name: Deploy outputs on all nodes
+      include_tasks: tasks/outputs.yml
+      when: deploy_outputs | lower in ['yes', 'y']
+
+    - name: Skip outputs deployment
+      debug:
+        msg: "Skipping outputs deployment"
+      when: deploy_outputs | lower not in ['yes', 'y']
+
+    # =====================================================
+    # Stop JOB
+    # =====================================================
+    - name: Stop Job From Flink Cluster
+      include_tasks: tasks/stopjob.yml
+      when: stop_job | lower in ['yes', 'y']
+
+    - name: Skip Job Stop/Drain
+      debug:
+        msg: "Skipping Job Stopping or Drain"
+      when: stop_job | lower not in ['yes', 'y']
+
+    # =====================================================
+    # Start JOB
+    # =====================================================
+
+    - name: Read /etc/environment
+      slurp:
+        path: /etc/environment
+      register: env_file_content
+
+
+    - name: Reload FLINK vars into Ansible
+      set_fact:
+        flink_jar: >-
+          {{ env_file_content.content
+             | b64decode
+             | regex_search('^FLINK_JAR=(.*)$', multiline=True)
+             | regex_replace('^FLINK_JAR=', '') }}
+        flink_jobconfig: >-
+          {{ env_file_content.content
+             | b64decode
+             | regex_search('^FLINK_JOBCONFIG=(.*)$', multiline=True)
+             | regex_replace('^FLINK_JOBCONFIG=', '') }}
+
+    - name: Start Job in Flink Cluster
+      include_tasks: tasks/startjob.yml
+      when: start_job | lower in ['yes', 'y']
+
+    - name: Skip Job Submit
+      debug:
+        msg: "Skipping Job Submit."
+      when: start_job | lower not in ['yes', 'y']
+
